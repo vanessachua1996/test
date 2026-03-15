@@ -5,3 +5,16 @@ p {
 h1 {
     text-align: center;
 }
+
+.welcome {
+    display: grid;
+    height: 100%;
+    align-items: center;
+    text-align: center;
+}
+
+.jelly {
+    position: absolute;
+    right: 10px;
+    bottom: 15px;
+}
