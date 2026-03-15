@@ -7,7 +7,7 @@ body {
     margin: 0;
     overflow: hidden;
     padding: 0;
-    font-family: Arial, sans-serif;
+    background: #b7d0ff;
 }
 
 h1 {
@@ -48,15 +48,13 @@ h1 {
 .clear-stamps,
 .size-button,
 .cursor-option {
-    border: 2px solid #d69f00;
-    border-radius: 999px;
-    background: #fff6bf;
-    color: #6a4b00;
     font: inherit;
     font-weight: 700;
     padding: 0.5rem 0.9rem;
-    box-shadow: 0 3px 0 #e0c35a;
     cursor: pointer;
+    background-color: rgba(255, 255, 255, 0.424);
+    border: 0px;
+    border-radius: 5px;
 }
 
 .size-button {
@@ -72,45 +70,26 @@ h1 {
     flex-direction: column;
     gap: 0.55rem;
     align-items: stretch;
-    padding: 0.6rem 0.7rem;
-    border: 2px solid #d69f00;
-    border-radius: 16px;
-    background: rgba(255, 246, 191, 0.95);
-    box-shadow: 0 5px 0 #e0c35a;
+
 }
 
 .panel-label {
     margin: 0;
-    font-weight: 700;
-    color: #6a4b00;
     text-transform: lowercase;
 }
 
 .stamp-preview-wrap {
     display: flex;
-    flex-direction: column;
-    align-items: center;
-    gap: 0.25rem;
+    align-items: left;
     padding: 0.55rem 0.7rem;
-    border: 2px dashed #d69f00;
-    border-radius: 14px;
-    background: rgba(255, 255, 255, 0.35);
 }
 
 .stamp-preview {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 3.5rem;
     line-height: 1;
-    color: #ffd84d;
-    text-shadow:
-        0 0 0 #f4b400,
-        2px 2px 0 #e0a800,
-        -2px 2px 0 #fff3b0;
-}
-
-.stamp-preview-label {
-    margin: 0;
-    color: #6a4b00;
-    font-size: 0.9rem;
-    font-weight: 700;
 }
 
 .cursor-option {
@@ -128,23 +107,31 @@ h1 {
 }
 
 .cursor-option.is-active {
-    background: #ffd84d;
+    background:  rgba(255, 255, 255, 0.732);
     transform: translateY(1px);
-    box-shadow: 0 2px 0 #e0c35a;
 }
 
 .stamp {
     position: fixed;
+    display: flex;
+    align-items: center;
+    justify-content: center;
     transform: translate(-50%, -50%) rotate(var(--stamp-rotate, -14deg)) scale(1);
     font-size: 3rem;
     line-height: 1;
-    color: #ffd84d;
-    text-shadow:
-        0 0 0 #f4b400,
-        2px 2px 0 #e0a800,
-        -2px 2px 0 #fff3b0;
     pointer-events: none;
     animation: stamp-pop 220ms ease-out forwards;
+}
+
+.stamp-art {
+    display: block;
+    width: 1em;
+    height: 1em;
+}
+
+.stamp-art-preview {
+    width: 1em;
+    height: 1em;
 }
 
 .jelly-pic {
@@ -237,7 +224,5 @@ h1 {
     .jelly a {
         display: inline-block;
         padding: 0.35rem 0.55rem;
-        background: rgba(255, 255, 255, 0.8);
-        border-radius: 999px;
     }
 }
