@@ -1,5 +1,6 @@
 <head>
   <title>This is my website</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
   <link rel="stylesheet" href="styles.css">
   <link rel="icon" type="image/x-icon" href="/images/favicon.png">
 </head>
@@ -12,5 +13,108 @@
   <div class="jelly">
     <a href="/jelly">click here to see jelly</a>
   </div>
+  <div class="cursor-panel" aria-label="cursor picker">
+    <p class="panel-label">stamp picker</p>
+    <button class="cursor-option is-active" type="button" data-shape="star">⭐ star</button>
+    <button class="cursor-option" type="button" data-shape="heart">❤️ heart</button>
+    <button class="cursor-option" type="button" data-shape="flower">🌼 flower</button>
+  </div>
+  <div class="stamp-controls" aria-label="stamp controls">
+    <div class="stamp-preview-wrap">
+      <div class="stamp-preview" aria-live="polite">⭐</div>
+      <p class="stamp-preview-label">size: <span class="stamp-size-value">3.0</span>rem</p>
+    </div>
+    <div class="stamp-buttons">
+      <button class="size-button" type="button" data-size="down">-</button>
+      <button class="size-button" type="button" data-size="up">+</button>
+      <button class="clear-stamps" type="button">clear</button>
+    </div>
+  </div>
 
+  <script>
+    const shapeMap = {
+      star: {
+        symbol: "⭐",
+        cursor: "url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='40' height='40' viewBox='0 0 40 40'%3E%3Ctext x='5' y='29' font-size='26'%3E%E2%AD%90%3C/text%3E%3C/svg%3E\") 8 30, auto"
+      },
+      heart: {
+        symbol: "❤️",
+        cursor: "url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='40' height='40' viewBox='0 0 40 40'%3E%3Ctext x='5' y='29' font-size='24'%3E%E2%9D%A4%EF%B8%8F%3C/text%3E%3C/svg%3E\") 8 30, auto"
+      },
+      flower: {
+        symbol: "🌼",
+        cursor: "url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='40' height='40' viewBox='0 0 40 40'%3E%3Ctext x='4' y='29' font-size='25'%3E%F0%9F%8C%BC%3C/text%3E%3C/svg%3E\") 8 30, auto"
+      }
+    };
+
+    const body = document.body;
+    const clearButton = document.querySelector(".clear-stamps");
+    const sizeButtons = document.querySelectorAll(".size-button");
+    const shapeButtons = document.querySelectorAll(".cursor-option");
+    const stampPreview = document.querySelector(".stamp-preview");
+    const stampSizeValue = document.querySelector(".stamp-size-value");
+    let currentShape = "star";
+    let currentSize = 3;
+
+    const updateCursor = () => {
+      body.style.cursor = shapeMap[currentShape].cursor;
+    };
+
+    const updatePreview = () => {
+      stampPreview.textContent = shapeMap[currentShape].symbol;
+      stampPreview.style.fontSize = `${currentSize}rem`;
+      stampSizeValue.textContent = currentSize.toFixed(1);
+    };
+
+    const updateSize = (nextSize) => {
+      currentSize = Math.max(1.5, Math.min(6, nextSize));
+      updatePreview();
+    };
+
+    updateCursor();
+    updatePreview();
+
+    document.addEventListener("click", (event) => {
+      if (event.target.closest(".stamp-controls") || event.target.closest(".cursor-panel")) {
+        return;
+      }
+
+      const stamp = document.createElement("div");
+      const rotation = `${Math.floor(Math.random() * 40) - 20}deg`;
+
+      stamp.className = "stamp";
+      stamp.textContent = shapeMap[currentShape].symbol;
+      stamp.style.left = `${event.clientX}px`;
+      stamp.style.top = `${event.clientY}px`;
+      stamp.style.fontSize = `${currentSize}rem`;
+      stamp.style.setProperty("--stamp-rotate", rotation);
+
+      document.body.appendChild(stamp);
+    });
+
+    clearButton.addEventListener("click", () => {
+      document.querySelectorAll(".stamp").forEach((stamp) => {
+        stamp.remove();
+      });
+    });
+
+    sizeButtons.forEach((button) => {
+      button.addEventListener("click", () => {
+        const direction = button.dataset.size === "up" ? 0.4 : -0.4;
+        updateSize(currentSize + direction);
+      });
+    });
+
+    shapeButtons.forEach((button) => {
+      button.addEventListener("click", () => {
+        currentShape = button.dataset.shape;
+        updateCursor();
+        updatePreview();
+
+        shapeButtons.forEach((shapeButton) => {
+          shapeButton.classList.toggle("is-active", shapeButton === button);
+        });
+      });
+    });
+  </script>
 </body>
