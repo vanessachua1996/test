@@ -135,16 +135,17 @@
       const stampPreview = document.querySelector(".stamp-preview");
       const MIN_SIZE = 0.1;
       const MAX_SIZE = 30;
+      const SOUND_ENABLED_STORAGE_KEY = "stamp-sound-enabled";
+      const SOUND_EXAGGERATION = 1.9;
       let currentShape = "star";
       let currentSize = 6;
-      let soundEnabled = true;
+      let soundEnabled = localStorage.getItem(SOUND_ENABLED_STORAGE_KEY) !== "false";
       let activePointerId = null;
       let lastDrawPoint = null;
       let repeatTimeoutId = null;
       let repeatIntervalId = null;
       let audioContext = null;
-      let audioUnlockPromise = null;
-      let audioPrimed = false;
+      let audioReady = false;
       let lastSoundAt = 0;
 
       const buildEmojiCursorSvg = (symbol, size) => {
@@ -254,146 +255,106 @@
         return audioContext;
       };
 
-      const playTone = (context, startTime, frequency, duration, type, volume) => {
-        const oscillator = context.createOscillator();
-        const gainNode = context.createGain();
-
-        oscillator.type = type;
-        oscillator.frequency.setValueAtTime(frequency, startTime);
-        gainNode.gain.setValueAtTime(0.0001, startTime);
-        gainNode.gain.exponentialRampToValueAtTime(volume, startTime + 0.01);
-        gainNode.gain.exponentialRampToValueAtTime(0.0001, startTime + duration);
-
-        oscillator.connect(gainNode);
-        gainNode.connect(context.destination);
-        oscillator.start(startTime);
-        oscillator.stop(startTime + duration);
+      const updateSoundToggleButton = () => {
+        soundToggleButton.textContent = soundEnabled ? "🔊" : "🔇";
+        soundToggleButton.setAttribute("aria-label", soundEnabled ? "sound on" : "sound off");
+        soundToggleButton.setAttribute("aria-pressed", String(soundEnabled));
       };
 
       const primeAudioContext = (context) => {
-        if (audioPrimed) {
-          return;
-        }
-
         const oscillator = context.createOscillator();
         const gainNode = context.createGain();
         const startTime = context.currentTime;
 
+        oscillator.type = "sine";
+        oscillator.frequency.setValueAtTime(880, startTime);
         gainNode.gain.setValueAtTime(0.00001, startTime);
-        oscillator.frequency.setValueAtTime(440, startTime);
+        gainNode.gain.exponentialRampToValueAtTime(0.00002, startTime + 0.01);
+        gainNode.gain.exponentialRampToValueAtTime(0.00001, startTime + 0.03);
         oscillator.connect(gainNode);
         gainNode.connect(context.destination);
         oscillator.start(startTime);
-        oscillator.stop(startTime + 0.01);
-        audioPrimed = true;
+        oscillator.stop(startTime + 0.03);
       };
 
-      const ensureAudioReady = async () => {
+      const unlockAudio = async () => {
         const context = getAudioContext();
 
         if (!context) {
           return null;
         }
 
-        if (context.state === "running" && audioPrimed) {
-          return context;
-        }
-
-        if (!audioUnlockPromise) {
-          audioUnlockPromise = (async () => {
-            if (context.state !== "running") {
-              try {
-                await context.resume();
-              } catch (error) {
-                return null;
-              }
-            }
-
-            if (context.state === "running") {
-              primeAudioContext(context);
-              return context;
-            }
-
+        if (context.state !== "running") {
+          try {
+            await context.resume();
+          } catch (error) {
             return null;
-          })();
+          }
         }
 
-        const readyContext = await audioUnlockPromise;
-        audioUnlockPromise = null;
-        return readyContext;
+        if (context.state !== "running") {
+          return null;
+        }
+
+        if (!audioReady) {
+          primeAudioContext(context);
+          audioReady = true;
+        }
+
+        return context;
       };
 
-      const playStickerSound = async (shapeKey, retryCount = 0) => {
+      const playTone = (context, tone) => {
+        const oscillator = context.createOscillator();
+        const gainNode = context.createGain();
+        const startTime = context.currentTime + tone.offset;
+
+        oscillator.type = tone.type;
+        oscillator.frequency.setValueAtTime(tone.startFrequency, startTime);
+        oscillator.frequency.exponentialRampToValueAtTime(tone.endFrequency, startTime + tone.duration);
+        gainNode.gain.setValueAtTime(0.0001, startTime);
+        gainNode.gain.exponentialRampToValueAtTime(tone.volume, startTime + tone.attack);
+        gainNode.gain.exponentialRampToValueAtTime(0.0001, startTime + tone.duration);
+
+        oscillator.connect(gainNode);
+        gainNode.connect(context.destination);
+        oscillator.start(startTime);
+        oscillator.stop(startTime + tone.duration);
+      };
+
+      const createSoundPattern = (shapeKey) => {
         if (!soundEnabled) {
-          return;
+          return null;
         }
 
         const now = performance.now();
 
-        if (retryCount === 0 && now - lastSoundAt < 70) {
-          return;
+        if (now - lastSoundAt < 85) {
+          return null;
         }
 
-        if (retryCount === 0) {
-          lastSoundAt = now;
-        }
-
-        const context = await ensureAudioReady();
-
-        if (!context) {
-          if (retryCount < 2) {
-            window.setTimeout(() => {
-              playStickerSound(shapeKey, retryCount + 1);
-            }, 80);
-          }
-
-          return;
-        }
-
-        if (context.state !== "running") {
-          if (retryCount < 2) {
-            window.setTimeout(() => {
-              playStickerSound(shapeKey, retryCount + 1);
-            }, 80);
-          }
-
-          return;
-        }
-
-        const startTime = context.currentTime;
         const normalizedSize = (currentSize - MIN_SIZE) / (MAX_SIZE - MIN_SIZE);
-        const pitchMultiplier = 2.6 - normalizedSize * 2.3;
-        const durationMultiplier = 0.45 + normalizedSize * 2.75;
+        const exaggeratedSize = Math.min(1, Math.pow(normalizedSize, 0.7) * SOUND_EXAGGERATION);
+        const pitchDrop = 1 - exaggeratedSize * 0.72;
+        const durationBoost = 0.06 + exaggeratedSize * 0.24;
+        const loudnessBoost = 0.018 + exaggeratedSize * 0.05;
         const soundPatterns = {
           star: [
-            { frequency: 740, duration: 0.02, type: "triangle", volume: 0.05, offset: 0 },
-            { frequency: 980, duration: 0.08, type: "triangle", volume: 0.04, offset: 0.08 },
-            { frequency: 1240, duration: 0.07, type: "sine", volume: 0.03, offset: 0.16 },
+            { type: "triangle", startFrequency: 1300 * pitchDrop, endFrequency: 920 * pitchDrop, duration: 0.08 + durationBoost, attack: 0.01, volume: 0.018 + loudnessBoost, offset: 0 },
+            { type: "sine", startFrequency: 1850 * pitchDrop, endFrequency: 1220 * pitchDrop, duration: 0.1 + durationBoost, attack: 0.015, volume: 0.012 + loudnessBoost * 0.8, offset: 0.045 },
           ],
           heart: [
-            { frequency: 320, duration: 0.12, type: "square", volume: 0.035, offset: 0 },
-            { frequency: 280, duration: 0.12, type: "square", volume: 0.03, offset: 0.11 },
-            { frequency: 420, duration: 0.08, type: "sawtooth", volume: 0.025, offset: 0.22 },
+            { type: "square", startFrequency: 420 * pitchDrop, endFrequency: 220 * pitchDrop, duration: 0.11 + durationBoost, attack: 0.008, volume: 0.016 + loudnessBoost, offset: 0 },
+            { type: "triangle", startFrequency: 360 * pitchDrop, endFrequency: 180 * pitchDrop, duration: 0.14 + durationBoost, attack: 0.012, volume: 0.012 + loudnessBoost * 0.85, offset: 0.06 },
           ],
           peachy: [
-            { frequency: 510, duration: 0.06, type: "sawtooth", volume: 0.04, offset: 0 },
-            { frequency: 660, duration: 0.06, type: "sawtooth", volume: 0.035, offset: 0.05 },
-            { frequency: 880, duration: 0.1, type: "triangle", volume: 0.03, offset: 0.11 },
+            { type: "sawtooth", startFrequency: 760 * pitchDrop, endFrequency: 420 * pitchDrop, duration: 0.09 + durationBoost, attack: 0.008, volume: 0.014 + loudnessBoost, offset: 0 },
+            { type: "triangle", startFrequency: 920 * pitchDrop, endFrequency: 540 * pitchDrop, duration: 0.12 + durationBoost, attack: 0.014, volume: 0.012 + loudnessBoost * 0.85, offset: 0.04 },
           ],
         };
 
-        const pattern = soundPatterns[shapeKey] ?? soundPatterns.star;
-
-        pattern.forEach((tone) => {
-          playTone(
-            context,
-            startTime + tone.offset * durationMultiplier,
-            tone.frequency * pitchMultiplier,
-            tone.duration * durationMultiplier,
-            tone.type,
-            tone.volume
-          );
-        });
+        lastSoundAt = now;
+        return soundPatterns[shapeKey] ?? soundPatterns.star;
       };
 
       const isUiTarget = (target) => {
@@ -429,10 +390,6 @@
       updateCursor();
       updatePreview();
 
-      const tryUnlockAudio = () => {
-        void ensureAudioReady();
-      };
-
       const isPrimaryPress = (event) => {
         if (event.pointerType === "touch") {
           return true;
@@ -440,28 +397,17 @@
 
         return event.button === 0;
       };
-
-      document.addEventListener("pointerdown", tryUnlockAudio, { passive: true });
-      document.addEventListener("touchstart", tryUnlockAudio, { passive: true });
-      document.addEventListener("click", tryUnlockAudio, { passive: true });
-
-      document.addEventListener("visibilitychange", () => {
-        if (!document.hidden) {
-          tryUnlockAudio();
-        }
-      });
-
-      window.addEventListener("pageshow", tryUnlockAudio);
+      updateSoundToggleButton();
 
       document.addEventListener("pointerdown", (event) => {
         if (!isPrimaryPress(event) || isUiTarget(event.target)) {
           return;
         }
 
-        tryUnlockAudio();
         activePointerId = event.pointerId;
         lastDrawPoint = { x: event.clientX, y: event.clientY };
         event.preventDefault();
+        void unlockAudio();
         placeStamp(event.clientX, event.clientY);
       });
 
@@ -531,15 +477,28 @@
         }
       });
 
+      const playStickerSound = async (shapeKey) => {
+        const pattern = createSoundPattern(shapeKey);
+
+        if (!pattern) {
+          return;
+        }
+
+        const context = await unlockAudio();
+
+        if (!context) {
+          return;
+        }
+
+        pattern.forEach((tone) => {
+          playTone(context, tone);
+        });
+      };
+
       soundToggleButton.addEventListener("click", () => {
         soundEnabled = !soundEnabled;
-        soundToggleButton.textContent = soundEnabled ? "🔊" : "🔇";
-        soundToggleButton.setAttribute("aria-label", soundEnabled ? "sound on" : "sound off");
-        soundToggleButton.setAttribute("aria-pressed", String(soundEnabled));
-
-        if (soundEnabled) {
-          tryUnlockAudio();
-        }
+        localStorage.setItem(SOUND_ENABLED_STORAGE_KEY, String(soundEnabled));
+        updateSoundToggleButton();
       });
 
       sizeButtons.forEach((button) => {
@@ -550,8 +509,8 @@
             return;
           }
 
-          tryUnlockAudio();
           event.preventDefault();
+          void unlockAudio();
           changeSizeByStep(direction);
           stopSizeRepeat();
           repeatTimeoutId = window.setTimeout(() => {
