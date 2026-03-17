@@ -21,6 +21,13 @@
       <button class="info-close" type="button" aria-label="close info">x</button>
       <h2 id="info-title">patch notes</h2>
       <h3>Update 1.1.2 | 17.03.26</h3>
+      <p><b>new features</b></p>
+      <ul>
+        <li>added sound effects that changes based on size. thanks, Tove! </li>
+        <li>added on/off sound button</li>
+        <li>new peachy sticker</li>
+        <li>patch notes pop up</li>
+      </ul>
       <p><b>bug fixes</b></p>
       <ul>
         <li>updated size input field fix to allow backspace</li>
@@ -29,13 +36,6 @@
         <li>background text locked and cannot be highlighted anymore</li>
         <li>improved clickability around preview sticker area</li>
         <li>icon button sizing</li>
-      </ul>
-    <p><b>new features</b></p>
-      <ul>
-        <li>added sound effects that changes based on size. thanks, Tove! </li>
-        <li>added on/off sound button</li>
-        <li>new peachy sticker</li>
-        <li>patch notes pop up</li>
       </ul>
     </div>
   </div>
@@ -64,6 +64,9 @@
         <button class="size-button" type="button" data-size="down">-</button>
         <button class="size-button" type="button" data-size="up">+</button>
         <button class="sound-toggle" type="button" aria-label="sound on" aria-pressed="true">🔊</button>
+        <div class="sound-tooltip" role="status" aria-live="polite" hidden>
+          turn off silent mode
+        </div>
         <button class="clear-stamps" type="button">clear</button>
       </div>
     </div>
@@ -128,12 +131,15 @@
       const infoBackdrop = document.querySelector(".info-modal-backdrop");
       const infoCloseButton = document.querySelector(".info-close");
       const soundToggleButton = document.querySelector(".sound-toggle");
+      const soundTooltip = document.querySelector(".sound-tooltip");
       const sizeButtons = document.querySelectorAll(".size-button");
       const sizeInput = document.querySelector(".size-input");
       const shapeButtons = document.querySelectorAll(".cursor-option");
       const stampPreview = document.querySelector(".stamp-preview");
       const MIN_SIZE = 0.1;
       const MAX_SIZE = 30;
+      const isMobileViewport = window.matchMedia("(max-width: 700px)");
+      const hasTouchInput = window.matchMedia("(hover: none), (pointer: coarse)");
       let currentShape = "star";
       let currentSize = 6;
       let soundEnabled = true;
@@ -143,6 +149,7 @@
       let repeatIntervalId = null;
       let audioContext = null;
       let lastSoundAt = 0;
+      let soundTooltipTimeoutId = null;
 
       const buildEmojiCursorSvg = (symbol, size) => {
         const fontSize = Math.round(size * 0.72);
@@ -356,8 +363,27 @@
         updateSize(currentSize + delta);
       };
 
+      const shouldShowMobileSoundTooltip = () => {
+        return isMobileViewport.matches && hasTouchInput.matches && Boolean(soundTooltip);
+      };
+
+      const showMobileSoundTooltip = () => {
+        if (!shouldShowMobileSoundTooltip()) {
+          return;
+        }
+
+        window.clearTimeout(soundTooltipTimeoutId);
+        soundTooltip.hidden = false;
+        soundTooltip.classList.add("is-visible");
+        soundTooltipTimeoutId = window.setTimeout(() => {
+          soundTooltip.classList.remove("is-visible");
+          soundTooltip.hidden = true;
+        }, 3200);
+      };
+
       updateCursor();
       updatePreview();
+      showMobileSoundTooltip();
 
       document.addEventListener("pointerdown", (event) => {
         if (event.button !== 0 || isUiTarget(event.target)) {
@@ -441,6 +467,10 @@
         soundToggleButton.textContent = soundEnabled ? "🔊" : "🔇";
         soundToggleButton.setAttribute("aria-label", soundEnabled ? "sound on" : "sound off");
         soundToggleButton.setAttribute("aria-pressed", String(soundEnabled));
+
+        if (soundEnabled) {
+          showMobileSoundTooltip();
+        }
       });
 
       sizeButtons.forEach((button) => {
