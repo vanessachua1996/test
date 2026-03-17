@@ -143,6 +143,8 @@
       let repeatTimeoutId = null;
       let repeatIntervalId = null;
       let audioContext = null;
+      let audioUnlockPromise = null;
+      let audioPrimed = false;
       let lastSoundAt = 0;
 
       const buildEmojiCursorSvg = (symbol, size) => {
@@ -268,6 +270,59 @@
         oscillator.stop(startTime + duration);
       };
 
+      const primeAudioContext = (context) => {
+        if (audioPrimed) {
+          return;
+        }
+
+        const oscillator = context.createOscillator();
+        const gainNode = context.createGain();
+        const startTime = context.currentTime;
+
+        gainNode.gain.setValueAtTime(0.00001, startTime);
+        oscillator.frequency.setValueAtTime(440, startTime);
+        oscillator.connect(gainNode);
+        gainNode.connect(context.destination);
+        oscillator.start(startTime);
+        oscillator.stop(startTime + 0.01);
+        audioPrimed = true;
+      };
+
+      const ensureAudioReady = async () => {
+        const context = getAudioContext();
+
+        if (!context) {
+          return null;
+        }
+
+        if (context.state === "running" && audioPrimed) {
+          return context;
+        }
+
+        if (!audioUnlockPromise) {
+          audioUnlockPromise = (async () => {
+            if (context.state !== "running") {
+              try {
+                await context.resume();
+              } catch (error) {
+                return null;
+              }
+            }
+
+            if (context.state === "running") {
+              primeAudioContext(context);
+              return context;
+            }
+
+            return null;
+          })();
+        }
+
+        const readyContext = await audioUnlockPromise;
+        audioUnlockPromise = null;
+        return readyContext;
+      };
+
       const playStickerSound = async (shapeKey) => {
         if (!soundEnabled) {
           return;
@@ -281,14 +336,10 @@
 
         lastSoundAt = now;
 
-        const context = getAudioContext();
+        const context = await ensureAudioReady();
 
         if (!context) {
           return;
-        }
-
-        if (context.state === "suspended") {
-          await context.resume();
         }
 
         const startTime = context.currentTime;
@@ -359,6 +410,22 @@
 
       updateCursor();
       updatePreview();
+
+      const tryUnlockAudio = () => {
+        void ensureAudioReady();
+      };
+
+      document.addEventListener("pointerdown", tryUnlockAudio, { passive: true });
+      document.addEventListener("touchstart", tryUnlockAudio, { passive: true });
+      document.addEventListener("click", tryUnlockAudio, { passive: true });
+
+      document.addEventListener("visibilitychange", () => {
+        if (!document.hidden) {
+          tryUnlockAudio();
+        }
+      });
+
+      window.addEventListener("pageshow", tryUnlockAudio);
 
       document.addEventListener("pointerdown", (event) => {
         if (event.button !== 0 || isUiTarget(event.target)) {
@@ -442,6 +509,10 @@
         soundToggleButton.textContent = soundEnabled ? "🔊" : "🔇";
         soundToggleButton.setAttribute("aria-label", soundEnabled ? "sound on" : "sound off");
         soundToggleButton.setAttribute("aria-pressed", String(soundEnabled));
+
+        if (soundEnabled) {
+          tryUnlockAudio();
+        }
       });
 
       sizeButtons.forEach((button) => {
