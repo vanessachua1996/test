@@ -126,6 +126,114 @@ h1 {
     pointer-events: none;
 }
 
+.tool-controller {
+    position: fixed;
+    left: 50%;
+    bottom: 18px;
+    transform: translateX(-50%);
+    display: none;
+    align-items: center;
+    gap: 1rem;
+    padding: 0.8rem 1rem;
+    border-radius: 999px;
+    background: rgb(223 234 255 / 92%);
+    box-shadow: 0 12px 30px rgb(35 52 88 / 18%);
+    backdrop-filter: blur(8px);
+    z-index: 24;
+}
+
+.tool-toggle-group {
+    display: flex;
+    align-items: center;
+    gap: 0.45rem;
+}
+
+.tool-toggle {
+    width: 3rem;
+    height: 3rem;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0;
+    background: #c8d8fb;
+    border: 0;
+    border-radius: 999px;
+    cursor: pointer;
+    transition: background-color 160ms ease, transform 160ms ease;
+}
+
+.tool-toggle svg {
+    width: 1.4rem;
+    height: 1.4rem;
+    fill: #203561;
+}
+
+.tool-toggle.is-active {
+    background: #fafcff;
+    transform: translateY(1px);
+}
+
+.tool-slider-wrap {
+    display: flex;
+    align-items: center;
+    gap: 0.65rem;
+    color: #203561;
+    font-weight: 700;
+    text-transform: lowercase;
+}
+
+.tool-slider {
+    width: min(26vw, 220px);
+    accent-color: #203561;
+    cursor: pointer;
+}
+
+.tool-mobile-actions {
+    display: none;
+    align-items: center;
+    gap: 0.45rem;
+}
+
+.sound-toggle-mobile,
+.clear-stamps-mobile {
+    min-width: 0;
+}
+
+body.use-overlay-cursor,
+body.use-overlay-cursor * {
+    cursor: none !important;
+}
+
+.cursor-overlay {
+    position: fixed;
+    left: 0;
+    top: 0;
+    width: 84px;
+    height: 84px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transform: translate(-50%, -50%);
+    pointer-events: none;
+    z-index: 60;
+}
+
+.cursor-overlay[hidden] {
+    display: none;
+}
+
+.cursor-overlay.is-eraser {
+    border: 3px solid #ff6f7f;
+    border-radius: 999px;
+    background: transparent;
+}
+
+.cursor-overlay-art {
+    width: 100%;
+    height: 100%;
+    display: block;
+}
+
 .stamp-buttons {
     display: flex;
     gap: 0.45rem;
@@ -261,6 +369,7 @@ h1 {
 .size-button:hover,
 .sound-toggle:hover,
 .cursor-option:hover,
+.tool-toggle:hover,
 .info-button:hover,
 .info-close:hover {
     background: #fafcff;
@@ -333,13 +442,16 @@ h1 {
     .jelly {
         right: 5%;
         top: 20px;
+        bottom: auto;
+        left: auto;
+        transform: none;
         text-align: center;
     }
 
     .info-button {
         top: auto;
         right: 10px;
-        bottom: 70px;
+        bottom: calc(176px + env(safe-area-inset-bottom, 0px));
     }
 
     .info-modal-card {
@@ -366,14 +478,42 @@ h1 {
     .stamp-controls {
         left: 10px;
         right: 10px;
-        bottom: 10px;
+        bottom: calc(72px + env(safe-area-inset-bottom, 0px));
         width: auto;
         max-width: calc(100vw - 20px);
+        z-index: 20;
+    }
+
+    .tool-controller {
+        display: flex;
+        left: 10px;
+        right: 10px;
+        bottom: calc(10px + env(safe-area-inset-bottom, 0px));
+        width: auto;
+        transform: none;
+        align-items: center;
+        padding: 0.6rem 0.75rem;
+        gap: 0.75rem;
+        border-radius: 18px;
+    }
+
+    .tool-mobile-actions {
+        display: flex;
     }
 
     .stamp-buttons {
         display: grid;
         grid-template-columns: 1fr 1fr 1.3fr 1.4fr;
+    }
+
+    .stamp-buttons .size-button,
+    .stamp-buttons .sound-toggle,
+    .stamp-buttons .clear-stamps {
+        display: none;
+    }
+
+    .stamp-controls .size-input-wrap {
+        display: none;
     }
 
     .sound-tooltip {
@@ -407,9 +547,57 @@ h1 {
         font-size: 0.9rem;
     }
 
+    .tool-toggle {
+        width: 2.8rem;
+        height: 2.8rem;
+        min-width: 2.8rem;
+    }
+
+    .tool-slider-wrap {
+        flex: 1;
+        min-width: 0;
+        gap: 0.6rem;
+    }
+
+    .tool-slider-wrap span {
+        font-size: 0.9rem;
+        white-space: nowrap;
+    }
+
+    .tool-slider {
+        width: 100%;
+        min-width: 0;
+    }
+
+    .sound-toggle-mobile,
+    .clear-stamps-mobile {
+        min-height: 44px;
+        font-size: 0.95rem;
+        padding: 0.6rem 0.8rem;
+        box-sizing: border-box;
+        border-radius: 999px;
+    }
+
+    body.use-overlay-cursor,
+    body.use-overlay-cursor * {
+        cursor: auto !important;
+    }
+
+    .cursor-overlay {
+        display: none !important;
+    }
 }
 
 @media (min-width: 701px) {
+    .tool-controller {
+        display: inline-flex;
+    }
+
+    .stamp-controls .size-input-wrap,
+    .stamp-controls .size-button {
+        display: none;
+    }
+
     .sound-tooltip {
         display: none;
     }

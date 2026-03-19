@@ -70,6 +70,30 @@
         <button class="clear-stamps" type="button">clear</button>
       </div>
     </div>
+    <div class="tool-controller" aria-label="drawing tools">
+      <div class="tool-toggle-group" role="group" aria-label="tool mode">
+        <button class="tool-toggle is-active" type="button" data-tool="stamp" aria-label="sticker cursor">
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M6 3.5L18.5 12L12.7 13.4L15.6 20.5L12.7 21.7L9.8 14.6L6 19V3.5Z" />
+          </svg>
+        </button>
+        <button class="tool-toggle" type="button" data-tool="erase" aria-label="eraser">
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <path
+              d="M8.4 5.2C9.1 4.5 10.3 4.5 11 5.2L18.8 13C19.5 13.7 19.5 14.9 18.8 15.6L14.6 19.8C14.1 20.3 13.5 20.5 12.8 20.5H7.9C7.2 20.5 6.6 20.2 6.1 19.7L3.9 17.5C3.2 16.8 3.2 15.6 3.9 14.9L8.4 5.2ZM10 6.8L5.5 11.3L10.9 16.7L15.4 12.2L10 6.8ZM12.3 18.1C12.5 18.1 12.7 18 12.8 17.9L13.8 16.9L8.4 11.5L5.6 14.3C5.3 14.6 5.3 15.1 5.6 15.4L7.8 17.6C8.1 17.9 8.5 18.1 8.9 18.1H12.3Z" />
+          </svg>
+        </button>
+      </div>
+      <label class="tool-slider-wrap">
+        <span>scale</span>
+        <input class="tool-slider" type="range" min="0.1" max="30" step="0.1" value="6" aria-label="tool size" />
+      </label>
+      <div class="tool-mobile-actions">
+        <button class="sound-toggle sound-toggle-mobile" type="button" aria-label="sound on" aria-pressed="true">🔊</button>
+        <button class="clear-stamps clear-stamps-mobile" type="button">clear</button>
+      </div>
+    </div>
+    <div class="cursor-overlay" aria-hidden="true"></div>
 
     <script>
       const starSvg = `<svg width="41" height="40" viewBox="0 0 41 40" fill="none" xmlns="http://www.w3.org/2000/svg">
@@ -131,16 +155,22 @@
       const infoBackdrop = document.querySelector(".info-modal-backdrop");
       const infoCloseButton = document.querySelector(".info-close");
       const soundToggleButton = document.querySelector(".sound-toggle");
+      const soundToggleButtons = document.querySelectorAll(".sound-toggle");
       const soundTooltip = document.querySelector(".sound-tooltip");
       const sizeButtons = document.querySelectorAll(".size-button");
       const sizeInput = document.querySelector(".size-input");
+      const toolSlider = document.querySelector(".tool-slider");
+      const toolButtons = document.querySelectorAll(".tool-toggle");
       const shapeButtons = document.querySelectorAll(".cursor-option");
       const stampPreview = document.querySelector(".stamp-preview");
+      const cursorOverlay = document.querySelector(".cursor-overlay");
+      const clearButtons = document.querySelectorAll(".clear-stamps");
       const MIN_SIZE = 0.1;
       const MAX_SIZE = 30;
       const isMobileViewport = window.matchMedia("(max-width: 700px)");
       const hasTouchInput = window.matchMedia("(hover: none), (pointer: coarse)");
       let currentShape = "star";
+      let currentTool = "stamp";
       let currentSize = 6;
       let soundEnabled = true;
       let activePointerId = null;
@@ -149,35 +179,86 @@
       let repeatIntervalId = null;
       let audioContext = null;
       let lastSoundAt = 0;
+      let lastEraseSoundAt = 0;
       let soundTooltipTimeoutId = null;
+      let isHoveringInteractiveCursorTarget = false;
+      const INTERACTIVE_CURSOR_PADDING = 12;
 
-      const buildEmojiCursorSvg = (symbol, size) => {
-        const fontSize = Math.round(size * 0.72);
-
-        return `<svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}" viewBox="0 0 ${size} ${size}"><text x="50%" y="52%" dominant-baseline="middle" text-anchor="middle" font-size="${fontSize}">${symbol}</text></svg>`;
+      const shouldUseOverlayCursor = () => {
+        return !hasTouchInput.matches;
       };
 
-      const buildImageCursorSvg = (svg, size) => {
-        return svg
-          .replace(/width="[^"]*"/, `width="${size}"`)
-          .replace(/height="[^"]*"/, `height="${size}"`);
+      const getCursorPixelSize = () => {
+        return Math.max(18, Math.round(currentSize * 14));
       };
 
-      const buildCursor = () => {
-        const cursorSize = Math.round(currentSize * 14);
-        const shape = shapeMap[currentShape];
-        const cursorSvg =
-          shape.type === "image"
-            ? buildImageCursorSvg(shape.svg, cursorSize)
-            : buildEmojiCursorSvg(shape.symbol, cursorSize);
-        const encodedSvg = encodeURIComponent(cursorSvg);
-        const hotspot = Math.round(cursorSize / 2);
+      const getEraserRadius = () => {
+        return getCursorPixelSize() / 2;
+      };
 
-        return `url("data:image/svg+xml,${encodedSvg}") ${hotspot} ${hotspot}, auto`;
+      const getInteractiveCursorTarget = (target) => {
+        if (!(target instanceof Element)) {
+          return null;
+        }
+
+        return target.closest("button, a, input, label");
+      };
+
+      const getInteractiveCursorTargetAtPoint = (x, y) => {
+        const candidates = document.querySelectorAll("button, a, input, label");
+
+        for (const candidate of candidates) {
+          const rect = candidate.getBoundingClientRect();
+          const isWithinHorizontalBounds =
+            x >= rect.left - INTERACTIVE_CURSOR_PADDING && x <= rect.right + INTERACTIVE_CURSOR_PADDING;
+          const isWithinVerticalBounds =
+            y >= rect.top - INTERACTIVE_CURSOR_PADDING && y <= rect.bottom + INTERACTIVE_CURSOR_PADDING;
+
+          if (isWithinHorizontalBounds && isWithinVerticalBounds) {
+            return candidate;
+          }
+        }
+
+        return null;
       };
 
       const updateCursor = () => {
-        body.style.cursor = buildCursor();
+        const useOverlayCursor = shouldUseOverlayCursor();
+        const shouldShowCustomCursor = useOverlayCursor && !isHoveringInteractiveCursorTarget;
+
+        body.classList.toggle("use-overlay-cursor", shouldShowCustomCursor);
+        document.documentElement.style.cursor = shouldShowCustomCursor ? "none" : "";
+        body.style.cursor = shouldShowCustomCursor ? "none" : "";
+
+        if (!cursorOverlay) {
+          return;
+        }
+
+        if (!shouldShowCustomCursor) {
+          cursorOverlay.hidden = true;
+          return;
+        }
+
+        const cursorSize = getCursorPixelSize();
+        cursorOverlay.hidden = false;
+        cursorOverlay.classList.toggle("is-eraser", currentTool === "erase");
+        cursorOverlay.style.width = `${cursorSize}px`;
+        cursorOverlay.style.height = `${cursorSize}px`;
+
+        if (currentTool === "erase") {
+          cursorOverlay.innerHTML = "";
+        } else {
+          cursorOverlay.innerHTML = `<img class="cursor-overlay-art" src="${shapeMap[currentShape].src}" alt="">`;
+        }
+      };
+
+      const positionCursorOverlay = (x, y) => {
+        if (!cursorOverlay || cursorOverlay.hidden) {
+          return;
+        }
+
+        cursorOverlay.style.left = `${x}px`;
+        cursorOverlay.style.top = `${y}px`;
       };
 
       const updatePreview = () => {
@@ -200,7 +281,14 @@
         sizeInput.value = currentSize.toFixed(1).replace(/\.0$/, "");
       };
 
+      const syncToolSlider = () => {
+        if (toolSlider) {
+          toolSlider.value = currentSize.toFixed(1).replace(/\.0$/, "");
+        }
+      };
+
       const applySizeVisuals = () => {
+        syncToolSlider();
         updateCursor();
         updatePreview();
       };
@@ -274,6 +362,28 @@
         oscillator.stop(startTime + duration);
       };
 
+      const playSweepTone = (context, startTime, startFrequency, endFrequency, duration, volume) => {
+        const oscillator = context.createOscillator();
+        const gainNode = context.createGain();
+        const filterNode = context.createBiquadFilter();
+
+        oscillator.type = "sawtooth";
+        oscillator.frequency.setValueAtTime(startFrequency, startTime);
+        oscillator.frequency.exponentialRampToValueAtTime(endFrequency, startTime + duration);
+        filterNode.type = "lowpass";
+        filterNode.frequency.setValueAtTime(1200, startTime);
+        filterNode.frequency.exponentialRampToValueAtTime(420, startTime + duration);
+        gainNode.gain.setValueAtTime(0.0001, startTime);
+        gainNode.gain.exponentialRampToValueAtTime(volume, startTime + 0.015);
+        gainNode.gain.exponentialRampToValueAtTime(0.0001, startTime + duration);
+
+        oscillator.connect(filterNode);
+        filterNode.connect(gainNode);
+        gainNode.connect(context.destination);
+        oscillator.start(startTime);
+        oscillator.stop(startTime + duration);
+      };
+
       const playStickerSound = async (shapeKey) => {
         if (!soundEnabled) {
           return;
@@ -333,6 +443,39 @@
         });
       };
 
+      const playEraseSound = async () => {
+        if (!soundEnabled) {
+          return;
+        }
+
+        const now = performance.now();
+
+        if (now - lastEraseSoundAt < 110) {
+          return;
+        }
+
+        lastEraseSoundAt = now;
+
+        const context = getAudioContext();
+
+        if (!context) {
+          return;
+        }
+
+        if (context.state === "suspended") {
+          await context.resume();
+        }
+
+        const startTime = context.currentTime;
+        const normalizedSize = (currentSize - MIN_SIZE) / (MAX_SIZE - MIN_SIZE);
+        const duration = 0.08 + normalizedSize * 0.18;
+        const startFrequency = 720 - normalizedSize * 220;
+        const endFrequency = 250 - normalizedSize * 60;
+        const volume = 0.018 + normalizedSize * 0.02;
+
+        playSweepTone(context, startTime, startFrequency, endFrequency, duration, volume);
+      };
+
       const isUiTarget = (target) => {
         if (target.closest(".stamp-preview-wrap")) {
           return false;
@@ -342,9 +485,49 @@
           target.closest(".info-button") ||
           target.closest(".info-modal-card") ||
           target.closest(".stamp-controls") ||
+          target.closest(".tool-controller") ||
           target.closest(".cursor-panel") ||
           target.closest(".jelly a")
         );
+      };
+
+      const eraseStampAtPoint = (x, y) => {
+        const radius = getEraserRadius();
+        const stamps = document.querySelectorAll(".stamp");
+
+        stamps.forEach((stamp) => {
+          const rect = stamp.getBoundingClientRect();
+          const closestX = Math.max(rect.left, Math.min(x, rect.right));
+          const closestY = Math.max(rect.top, Math.min(y, rect.bottom));
+          const distance = Math.hypot(x - closestX, y - closestY);
+
+          if (distance <= radius) {
+            stamp.remove();
+          }
+        });
+      };
+
+      const applyToolAtPoint = (x, y) => {
+        if (currentTool === "erase") {
+          eraseStampAtPoint(x, y);
+          playEraseSound();
+          return;
+        }
+
+        placeStamp(x, y);
+      };
+
+      const getToolSpacing = () => {
+        return currentTool === "erase" ? Math.max(10, currentSize * 5) : Math.max(18, currentSize * 8);
+      };
+
+      const setCurrentTool = (nextTool) => {
+        currentTool = nextTool;
+        updateCursor();
+
+        toolButtons.forEach((button) => {
+          button.classList.toggle("is-active", button.dataset.tool === nextTool);
+        });
       };
 
       const setInfoModalOpen = (isOpen) => {
@@ -385,6 +568,38 @@
       updatePreview();
       showMobileSoundTooltip();
 
+      document.addEventListener("pointermove", (event) => {
+        const interactiveCursorTarget =
+          getInteractiveCursorTarget(event.target) ??
+          getInteractiveCursorTargetAtPoint(event.clientX, event.clientY);
+        const nextHoverState = Boolean(interactiveCursorTarget);
+
+        if (nextHoverState !== isHoveringInteractiveCursorTarget) {
+          isHoveringInteractiveCursorTarget = nextHoverState;
+          updateCursor();
+        }
+
+        positionCursorOverlay(event.clientX, event.clientY);
+      });
+
+      document.addEventListener("pointerenter", (event) => {
+        isHoveringInteractiveCursorTarget = Boolean(getInteractiveCursorTarget(event.target));
+        updateCursor();
+        positionCursorOverlay(event.clientX, event.clientY);
+
+        if (cursorOverlay && shouldUseOverlayCursor() && !isHoveringInteractiveCursorTarget) {
+          cursorOverlay.hidden = false;
+        }
+      });
+
+      document.addEventListener("pointerleave", () => {
+        isHoveringInteractiveCursorTarget = false;
+
+        if (cursorOverlay) {
+          cursorOverlay.hidden = true;
+        }
+      });
+
       document.addEventListener("pointerdown", (event) => {
         if (event.button !== 0 || isUiTarget(event.target)) {
           return;
@@ -393,7 +608,8 @@
         activePointerId = event.pointerId;
         lastDrawPoint = { x: event.clientX, y: event.clientY };
         event.preventDefault();
-        placeStamp(event.clientX, event.clientY);
+        positionCursorOverlay(event.clientX, event.clientY);
+        applyToolAtPoint(event.clientX, event.clientY);
       });
 
       document.addEventListener("pointermove", (event) => {
@@ -401,7 +617,7 @@
           return;
         }
 
-        const spacing = Math.max(18, currentSize * 8);
+        const spacing = getToolSpacing();
         const start = lastDrawPoint ?? { x: event.clientX, y: event.clientY };
         const dx = event.clientX - start.x;
         const dy = event.clientY - start.y;
@@ -415,7 +631,7 @@
 
         for (let index = 1; index <= steps; index += 1) {
           const progress = (spacing * index) / distance;
-          placeStamp(start.x + dx * progress, start.y + dy * progress);
+          applyToolAtPoint(start.x + dx * progress, start.y + dy * progress);
         }
 
         lastDrawPoint = {
@@ -438,10 +654,14 @@
         }
       });
 
-      clearButton.addEventListener("click", () => {
+      const clearAllStamps = () => {
         document.querySelectorAll(".stamp").forEach((stamp) => {
           stamp.remove();
         });
+      };
+
+      clearButtons.forEach((button) => {
+        button.addEventListener("click", clearAllStamps);
       });
 
       infoButton.addEventListener("click", () => {
@@ -462,15 +682,19 @@
         }
       });
 
-      soundToggleButton.addEventListener("click", () => {
+      soundToggleButtons.forEach((button) => {
+        button.addEventListener("click", () => {
         soundEnabled = !soundEnabled;
-        soundToggleButton.textContent = soundEnabled ? "🔊" : "🔇";
-        soundToggleButton.setAttribute("aria-label", soundEnabled ? "sound on" : "sound off");
-        soundToggleButton.setAttribute("aria-pressed", String(soundEnabled));
+          soundToggleButtons.forEach((toggleButton) => {
+            toggleButton.textContent = soundEnabled ? "🔊" : "🔇";
+            toggleButton.setAttribute("aria-label", soundEnabled ? "sound on" : "sound off");
+            toggleButton.setAttribute("aria-pressed", String(soundEnabled));
+          });
 
-        if (soundEnabled) {
-          showMobileSoundTooltip();
-        }
+          if (soundEnabled) {
+            showMobileSoundTooltip();
+          }
+        });
       });
 
       sizeButtons.forEach((button) => {
@@ -531,16 +755,36 @@
 
       window.addEventListener("pointerup", stopSizeRepeat);
 
+      if (toolSlider) {
+        toolSlider.addEventListener("input", () => {
+          const nextSize = Number.parseFloat(toolSlider.value);
+
+          if (Number.isFinite(nextSize)) {
+            updateSize(nextSize);
+          }
+        });
+      }
+
       shapeButtons.forEach((button) => {
         button.addEventListener("click", () => {
           currentShape = button.dataset.shape;
-          updateCursor();
+          setCurrentTool("stamp");
           updatePreview();
 
           shapeButtons.forEach((shapeButton) => {
             shapeButton.classList.toggle("is-active", shapeButton === button);
           });
         });
+      });
+
+      toolButtons.forEach((button) => {
+        button.addEventListener("click", () => {
+          setCurrentTool(button.dataset.tool);
+        });
+      });
+
+      hasTouchInput.addEventListener("change", () => {
+        updateCursor();
       });
     </script>
 </body>
