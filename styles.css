@@ -430,6 +430,13 @@ body.use-overlay-cursor * {
 }
 
 @media (max-width: 700px) {
+    html,
+    body {
+        width: 100%;
+        max-width: 100%;
+        overflow-x: clip;
+    }
+
     body {
         overflow-x: hidden;
     }
@@ -467,7 +474,7 @@ body.use-overlay-cursor * {
         top: 10px;
         left: 10px;
         width: auto;
-        max-width: 250px;
+        max-width: min(250px, calc(100vw - 20px));
         padding: 0.7rem;
         gap: 0.5rem;
         box-sizing: border-box;
@@ -480,7 +487,8 @@ body.use-overlay-cursor * {
         right: 10px;
         bottom: calc(72px + env(safe-area-inset-bottom, 0px));
         width: auto;
-        max-width: calc(100vw - 20px);
+        max-width: min(calc(100vw - 20px), 100%);
+        box-sizing: border-box;
         z-index: 20;
     }
 
@@ -492,6 +500,8 @@ body.use-overlay-cursor * {
         width: auto;
         transform: none;
         align-items: center;
+        max-width: min(calc(100vw - 20px), 100%);
+        box-sizing: border-box;
         padding: 0.6rem 0.75rem;
         gap: 0.75rem;
         border-radius: 18px;
