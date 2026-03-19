@@ -88,6 +88,10 @@
         <span>scale</span>
         <input class="tool-slider" type="range" min="0.1" max="30" step="0.1" value="6" aria-label="tool size" />
       </label>
+      <div class="tool-mobile-size" aria-label="mobile size controls">
+        <button class="size-button tool-mobile-size-button" type="button" data-size="down" aria-label="decrease tool size">-</button>
+        <button class="size-button tool-mobile-size-button" type="button" data-size="up" aria-label="increase tool size">+</button>
+      </div>
       <div class="tool-mobile-actions">
         <button class="sound-toggle sound-toggle-mobile" type="button" aria-label="sound on" aria-pressed="true">🔊</button>
         <button class="clear-stamps clear-stamps-mobile" type="button">clear</button>
@@ -165,7 +169,8 @@
       const stampPreview = document.querySelector(".stamp-preview");
       const cursorOverlay = document.querySelector(".cursor-overlay");
       const clearButtons = document.querySelectorAll(".clear-stamps");
-      const MIN_SIZE = 0.1;
+      const DESKTOP_MIN_SIZE = 0.1;
+      const MOBILE_MIN_SIZE = 0.5;
       const MAX_SIZE = 30;
       const isMobileViewport = window.matchMedia("(max-width: 700px)");
       const hasTouchInput = window.matchMedia("(hover: none), (pointer: coarse)");
@@ -184,8 +189,12 @@
       let isHoveringInteractiveCursorTarget = false;
       const INTERACTIVE_CURSOR_PADDING = 12;
 
+      const getMinSize = () => {
+        return isMobileViewport.matches && hasTouchInput.matches ? MOBILE_MIN_SIZE : DESKTOP_MIN_SIZE;
+      };
+
       const shouldUseOverlayCursor = () => {
-        return !hasTouchInput.matches;
+        return !hasTouchInput.matches || (hasTouchInput.matches && currentTool === "erase" && activePointerId !== null);
       };
 
       const getCursorPixelSize = () => {
@@ -224,7 +233,7 @@
 
       const updateCursor = () => {
         const useOverlayCursor = shouldUseOverlayCursor();
-        const shouldShowCustomCursor = useOverlayCursor && !isHoveringInteractiveCursorTarget;
+        const shouldShowCustomCursor = useOverlayCursor && (!isHoveringInteractiveCursorTarget || hasTouchInput.matches);
 
         body.classList.toggle("use-overlay-cursor", shouldShowCustomCursor);
         document.documentElement.style.cursor = shouldShowCustomCursor ? "none" : "";
@@ -274,15 +283,17 @@
       };
 
       const clampSize = (nextSize) => {
-        return Math.max(MIN_SIZE, Math.min(MAX_SIZE, nextSize));
+        return Math.max(getMinSize(), Math.min(MAX_SIZE, nextSize));
       };
 
       const syncSizeInput = () => {
+        sizeInput.min = String(getMinSize());
         sizeInput.value = currentSize.toFixed(1).replace(/\.0$/, "");
       };
 
       const syncToolSlider = () => {
         if (toolSlider) {
+          toolSlider.min = String(getMinSize());
           toolSlider.value = currentSize.toFixed(1).replace(/\.0$/, "");
         }
       };
@@ -408,7 +419,8 @@
         }
 
         const startTime = context.currentTime;
-        const normalizedSize = (currentSize - MIN_SIZE) / (MAX_SIZE - MIN_SIZE);
+        const minSize = getMinSize();
+        const normalizedSize = (currentSize - minSize) / (MAX_SIZE - minSize);
         const pitchMultiplier = 2.6 - normalizedSize * 2.3;
         const durationMultiplier = 0.45 + normalizedSize * 2.75;
         const soundPatterns = {
@@ -467,7 +479,8 @@
         }
 
         const startTime = context.currentTime;
-        const normalizedSize = (currentSize - MIN_SIZE) / (MAX_SIZE - MIN_SIZE);
+        const minSize = getMinSize();
+        const normalizedSize = (currentSize - minSize) / (MAX_SIZE - minSize);
         const duration = 0.08 + normalizedSize * 0.18;
         const startFrequency = 720 - normalizedSize * 220;
         const endFrequency = 250 - normalizedSize * 60;
@@ -542,7 +555,7 @@
       };
 
       const changeSizeByStep = (direction) => {
-        const delta = direction === "up" ? 0.4 : -0.4;
+        const delta = direction === "up" ? 0.5 : -0.5;
         updateSize(currentSize + delta);
       };
 
@@ -608,6 +621,7 @@
         activePointerId = event.pointerId;
         lastDrawPoint = { x: event.clientX, y: event.clientY };
         event.preventDefault();
+        updateCursor();
         positionCursorOverlay(event.clientX, event.clientY);
         applyToolAtPoint(event.clientX, event.clientY);
       });
@@ -644,6 +658,7 @@
         if (activePointerId === event.pointerId) {
           activePointerId = null;
           lastDrawPoint = null;
+          updateCursor();
         }
       });
 
@@ -651,6 +666,7 @@
         if (activePointerId === event.pointerId) {
           activePointerId = null;
           lastDrawPoint = null;
+          updateCursor();
         }
       });
 
@@ -784,7 +800,12 @@
       });
 
       hasTouchInput.addEventListener("change", () => {
+        updateSize(currentSize);
         updateCursor();
+      });
+
+      isMobileViewport.addEventListener("change", () => {
+        updateSize(currentSize);
       });
     </script>
 </body>
